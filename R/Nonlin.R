@@ -1,5 +1,5 @@
 
-# uses output of nls() to get an asymptotic covariance 
+# uses output of R's nls() to get an asymptotic covariance 
 # matrix in general heteroscedastic case
 
 # arguments:
@@ -9,7 +9,7 @@
 # value: approximate covariance matrix for the 
 #        estimated parameter vector
 
-nlshc <- function(nlsout,type='hc3') {
+nlshc <- function(nlsout,type='HC') {
    # notation: g(t,b) is the regression model, 
    # where t is the vector of variables for a 
    # given observation; b is the estimated parameter
@@ -28,5 +28,5 @@ nlshc <- function(nlsout,type='hc3') {
    # -1 means no constant term in the model
    lmout <- lm(yresidhm ~ xhm - 1)
    # vcovHC(lmout); was getting NAs for some data sets
-   car::hccm(lmout,type)
+   sandwich::vcovHC(lmout,type)
 }

@@ -28,15 +28,20 @@
 
 # arguments:
 #
-#   y: Y values in training set, vector or matrix
+#   y: Y values in training set, vector or matrix (the latter case is
+#      for multivariate Y, e.g. in a classification problem with more
+#      than 2 classes)
 #   xdata: X and associated neighbor indices; output of preprocessx()
 #   k:  number of nearest neighbors
 #   nearf: function to apply to the nearest neighbors 
 #          of a point; default is mean(), as in standard kNN
 #
-# value: class of type 'knn', consisting of the components of the
-#        the input xdata and a component regest, consisting of
-#        the estimated reg. ftn. at the X values in xdata; regest
+# value: object of class 'knn':
+#        x,scaling,idxs: from input xdata
+#        regest: estimated reg. ftn. at the X values 
+#        y: the Y values at those X values
+#        nycol: dimensionality of Y, normally 1
+#        k: input k value
 
 # NOTE: knnest() does NOT have an argument corresponding to xval in
 # preprocessx(); if it is desired that xval = TRUE, the user must call
@@ -44,6 +49,8 @@
 
 knnest <- function(y,xdata,k,nearf=meany)
 {
+   if (class(xdata) != 'preknn' && class(xdata) != 'knn') 
+      stop('must call preprocessx() first')
    # take only the idxs for our value of k
    idxs <- xdata$idxs 
    if (ncol(idxs) < k) stop('k must be <= kmax')
@@ -79,22 +86,23 @@ knnest <- function(y,xdata,k,nearf=meany)
 
 ######################  preprocessx()  ###############################
 
-# scale the X matrix, and form indices of neighbors
+# form indices of neighbors and scale the X matrix 
 
 # arguments:
 
-#    x: "X variables" matrix, cases in rows, predictors in columns; will
-#       be scaled by this function and returned in scaled form
+#    x: "X variables" matrix or data frame, cases in rows, predictors 
+#        in columns
 #    kmax: maximal number of nearest neighbors sought
 #    xval: cross-validation; if TRUE, the neighbors of a point 
 #          will not include the point itself
 
-# value: R list; component 'x' is the result of scale(x); 'idxs' is a
-#        matrix -- row i, column j shows the index of the jth-closest 
-#        data point to data point i, j = 1,...,kmax (actually j =
-#        2,...,kmax if xval component is TRUE; 'scaling' is a
-#        2-column matrix consisting of the attributes scaled:center and
-#        scaled:scale from scale(x)
+# value: object of class 'preknn', with components: 
+
+#        x: result of scale(x); 
+#        scaling: 2-column matrix consisting of the attributes 
+#                 scaled:center and scaled:scale from scale(x)
+#        idxs: matrix; row i, column j shows the index of jth-closest 
+#              data point to data point i, j = 1+xval,...,kmax 
 
 preprocessx <- function(x,kmax,xval=FALSE) {
    xval <- as.numeric(xval)
@@ -109,6 +117,7 @@ preprocessx <- function(x,kmax,xval=FALSE) {
    result$idxs <- nni[,(1+xval):ncol(nni)]
    result$xval <- xval
    result$kmax <- kmax
+   class(result) <- 'preknn'
    result
 }
 
@@ -121,6 +130,7 @@ preprocessx <- function(x,kmax,xval=FALSE) {
 
 #    object:  output from knnest(), object of class 'knn'
 #    predpts:  matrix/data frame of X values at which to predict Y
+#    needtoscale:  if TRUE, scale predpts according to xdata
 
 # value:
 
@@ -131,18 +141,55 @@ preprocessx <- function(x,kmax,xval=FALSE) {
 # training data is used as our est. reg. ftn. value at that predpts row
 
 predict.knn <- function(object,...) {
-   predpts <- unlist(...)
+   if (class(object) != 'knn')
+      stop('must be called on object of class "knn"')
    x <- object$x
+   ### predpts <- unlist(...)
+   arglist <- list(...)
+   predpts <- arglist[[1]]
+   if (is.vector(predpts)) {
+      if (ncol(x) == 1) {
+          predpts <- matrix(predpts,ncol=1)
+      } else
+          predpts <- matrix(predpts,nrow=1)
+   }
    if (!is.matrix(predpts)) 
-      stop('prediction points must be a matrix')
-   # need to scale predpts with the same values that had been used in
-   # the training set
-   ctr <- object$scaling[,1]
-   scl <- object$scaling[,2]
-   predpts <- scale(predpts,center=ctr,scale=scl)
-   tmp <- FNN::get.knnx(x,predpts,1)
-   idx <- tmp$nn.index
-   object$regest[idx,]
+      stop('prediction points must be in a matrix')
+   needtoscale <- arglist[[2]]
+   if (needtoscale) {
+      # scale predpts with the same values that had been used in
+      # the training set
+      ctr <- object$scaling[,1]
+      scl <- object$scaling[,2]
+      predpts <- scale(predpts,center=ctr,scale=scl)
+   }
+   k <- 1
+   # if (length(arglist) > 1) k <- arglist[[2]]
+   if (k == 1) {
+      tmp <- FNN::get.knnx(x,predpts,1)
+      idxs <- tmp$nn.index
+      # in regest[,], keep in mind that Y may be multivariate, 
+      # thus regest's matrix form, rather than a vector
+      return(object$regest[idxs,])
+   }
+   # start loc linear regression code
+   if (object$nycol > 1)
+      stop('not capable of multiclass Y yet')
+   if (k <= 1 + ncol(x))
+      stop('need more neighbors than 1 + number of predictors')
+   # for each predpt fit lin reg in neighborhood of that point, and use
+   # it to predict Y for predpt
+   tmp <- FNN::get.knnx(x,predpts,k)
+   idxs <- tmp$nn.index
+   npred <- nrow(predpts)
+   result <- vector(length = npred)
+   for (i in 1:npred) {
+      nbhdyvals <- object$y[idxs[i,],]
+      nbhdxvals <- object$x[idxs[i,],]
+      tmp <- lm(nbhdyvals ~ nbhdxvals)
+      result[i] <- coef(tmp) %*% c(1,predpts[i,])
+   }
+   result
 }
 
 ######################  kmin()  ###############################
@@ -156,7 +203,8 @@ predict.knn <- function(object,...) {
 #   xdata: result of calling preprocessx() on the X portion of the data;
 #          xval=True is suggested for that call
 #   lossftn(y,muhat): measure of loss if muhat used to predict y
-#   nk: number of values to try for k, evenly spaced
+#   nk: number of values to try for k, evenly spaced; or, if specified
+#       as a vector, the actual values to try
 #   nearf: see knnest()
 
 #   value: the value of k found to be "best"
@@ -170,13 +218,17 @@ kmin <- function(y,xdata,lossftn=l2,nk=5,nearf=meany) {
    kmax <- xdata$kmax
    meanerr <- function(k) {
       kout <- knnest(y,xdata,k,nearf)
-      kpred <- predict(kout,x)
+      kpred <- predict(kout,x,needtoscale=FALSE)
       mean(lossftn(y,kpred))
    }
    # evaluate at these values of k
-   ks <- floor(kmax/nk) * (1:nk)
+   if (length(nk) == 1) {
+      ks <- floor(kmax/nk) * (1:nk)
+   } else ks <- nk
+   if (min(ks) <= 1)
+      stop('need k at least 2')
    merrs <- ks
-   for (i in 1:nk) merrs[i] <- meanerr(ks[i])
+   for (i in 1:length((ks))) merrs[i] <- meanerr(ks[i])
    names(merrs) <- ks
    result <- list(meanerrs = merrs)
    result$kmin <- ks[which.min(merrs)]
@@ -184,14 +236,20 @@ kmin <- function(y,xdata,lossftn=l2,nk=5,nearf=meany) {
    result
 }
 
+#### removed, Aug. 8, 2019
+
+## # incorrect prediction in 2-class classification problem
+## predwrong <- function(muhat,y)
+##    as.integer(y == round(muhat))
+
 ### ######################  plot.kmin()  ###############################
-### 
-### # x is output from kmin()
-### 
-### plot.kmin <- function(x,y,...) {
-###    plot(names(x$meanerrs),x$meanerrs,
-###       xlab='k',ylab='mean error',pch=20)
-### }
+
+# x is output from kmin()
+
+plot.kmin <- function(x,y,...) {
+   plot(names(x$meanerrs),x$meanerrs,
+      xlab='k',ylab='mean error',pch=20)
+}
 
 ######################  meany(), etc. ###############################
 
@@ -239,7 +297,7 @@ parvsnonparplot <- function(lmout,knnout,cex=1.0) {
    parfitted <- lmout$fitted.values
    nonparfitted <- knnout$regest
    plot(nonparfitted,parfitted,cex=cex)
-   abline(0,1)
+   abline(0,1,col='red')
 }
 
 ######################  nonparvsxplot(), etc. ###############################
@@ -274,13 +332,14 @@ nonparvsxplot <- function(knnout,lmout=NULL) {
 # arguments:
 #    knnout: return value of knnest()
 
-nonparvarplot <- function(knnout) {
+nonparvarplot <- function(knnout,returnPts=FALSE) {
    nonparcondmean <- knnout$regest
    y <- knnout$y
    k <- knnout$k
    tmp <- knnest(y,knnout,k,nearf=vary)
    plot(knnout$regest,tmp$regest,xlab='mean',ylab='var')
    abline(0,1)
+   if (returnPts) return(cbind(knnout$regest,tmp$regest))
 }
 
 ######################  l2, etc.  ###############################

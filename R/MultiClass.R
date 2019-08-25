@@ -1,5 +1,9 @@
 
-# One-vs.-All (OVA) and All-vs.All (AVA), logit models
+# One-vs.-All (OVA) and All-vs.All (AVA), parametric models
+
+##################################################################
+# ovalogtrn: generate estimated regression functions
+##################################################################
 
 # arguments:
 
@@ -7,12 +11,7 @@
 #    trnxy:  X, Y training set; Y in last column; Y coded 0,1,...,m-1
 #            for the m classes
 #    predx:  X values from which to predict Y values
-#    tstxy:  X, Y test set, same format
 #    truepriors:  true class probabilities, typically from external source
-
-##################################################################
-# ovalogtrn: generate estimated regression functions
-##################################################################
 
 # arguments:
 
@@ -40,6 +39,7 @@ ovalogtrn <- function(m,trnxy,truepriors=NULL) {
       outmat[1,] <- outmat[1,] 
          - log((1-truepriors)/truepriors) + log((1-wrongpriors)/wrongpriors)
    }
+   colnames(outmat) <- as.character(0:(m-1))
    outmat
 }
 
@@ -51,18 +51,28 @@ ovalogtrn <- function(m,trnxy,truepriors=NULL) {
 # 
 #    coefmat:  coefficient matrix, output from ovalogtrn()
 #    predx:  as above
+#    probs:  in addition to predicted classes, return the condtional
+#            class probabilities as an attribute, 'probs'
 # 
 # value:
 # 
 #    vector of predicted Y values, in {0,1,...,m-1}, one element for
 #    each row of predx
 
-ovalogpred <- function(coefmat,predx) {
+ovalogpred <- function(coefmat,predx,probs=FALSE) {
    # get est reg ftn values for each row of predx and each col of
    # coefmat; vals from coefmat[,] in tmp[,i]
-   tmp <- as.matrix(cbind(1,predx)) %*% coefmat
+   #
+   # let m = number of classes, np = number of obs to be predicted
+   tmp <- as.matrix(cbind(1,predx)) %*% coefmat  # np x m 
    tmp <- logit(tmp)
-   apply(tmp,1,which.max) - 1
+   preds <- apply(tmp,1,which.max) - 1
+   if (probs) {
+      sumtmp <- apply(tmp,1,sum)  # length np
+      normalized <- diag(1/sumtmp) %*% tmp
+      attr(preds,'probs') <- normalized
+   }
+   preds
 }
 
 ##################################################################
@@ -94,8 +104,8 @@ ovalogloom <- function(m,trnxy) {
 
 # arguments:
 
-#    m:  as above
-#    trnxy:  as above
+#    m:  as above in ovalogtrn()
+#    trnxy:  as above in ovalogtrn()
 
 # value:
 
@@ -121,7 +131,9 @@ avalogtrn <- function(m,trnxy) {
    }
    coefmat <- NULL
    for (k in 1:ncol(ijs)) {
-      coefmat <- cbind(coefmat,doreg(ijs[,k]))
+      ij <- ijs[,k]
+      coefmat <- cbind(coefmat,doreg(ij))
+      colnames(coefmat)[k] <- paste(ij,collapse=',')
    }
    coefmat
 }
@@ -218,7 +230,8 @@ matrixtolist <- function (rc,m)
 #               that Y = j given that X = row i in the X data, 
 #               estimated from the training set
 
-knntrn <- function(y,xdata,m=length(levels(y)),k,truepriors=NULL) {
+knntrn <- function(y,xdata,m=length(levels(y)),k,truepriors=NULL)
+{
    if (m < 3) stop('m must be at least 3; use knnest() instead')  
    if (class(y) == 'factor') {
       y <- as.numeric(y) - 1
@@ -230,6 +243,7 @@ knntrn <- function(y,xdata,m=length(levels(y)),k,truepriors=NULL) {
    knnout <- knnest(ds,xdata,k)
    outmat <- knnout$regest
    outmat <- cbind(outmat,1-apply(outmat,1,sum))
+   colnames(outmat)[m] <- sprintf('y%d',m-1)
    if (!is.null(truepriors)) {
       tmp <- table(y)
       if (length(tmp) != m) 
@@ -284,6 +298,44 @@ predict.ovaknn <- function(object,...) {
 classadjust <- function(econdprobs,wrongratio,trueratio) {
    fratios <- (1 / econdprobs - 1) * (1 / wrongratio)
    1 / (1 + trueratio * fratios)
+}
+
+# plot estimated regression/probability function of a univariate, 
+# binary y against each specified pair of predictors in x 
+
+# for each point t, we ask whether est. P(Y = 1 | X = t) > P(Y = 1); if
+# yes, plot '1', else '0'
+ 
+# cexval is the value of cex in 'plot' 
+
+# if user specifies 'pairs', the format is one pair per column in the
+# provided matrix
+
+# if band is non-NULL, only points within band, say 0.1, of est. P(Y =
+# 1) are displayed, for a contour-like effect
+
+pwplot <- function(y,x,k,pairs=combn(ncol(x),2),cexval=0.5,band=NULL) {
+   p <- ncol(x)
+   meanyval <- mean(y)
+   ny <- length(y)
+   for (m in 1:ncol(pairs)) {
+      i <- pairs[1,m]
+      j <- pairs[2,m]
+      x2 <- x[,c(i,j)]
+      xd <- preprocessx(x2,k)
+      kout <- knnest(y,xd,k)
+      regest <- kout$regest
+      pred1 <- which(regest >= meanyval)
+      if (!is.null(band))  {
+         contourpts <- which(abs(regest - meanyval) < band)
+         x2 <- x2[contourpts,]
+      }
+      xnames <- names(x2)
+      plot(x2[pred1,1],x2[pred1,2],pch='1',cex=cexval,
+         xlab=xnames[1],ylab=xnames[2])
+      graphics::points(x2[-pred1,1],x2[-pred1,2],pch='0',cex=cexval)
+      readline("next plot")
+   }
 }
 
 

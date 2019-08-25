@@ -1,16 +1,18 @@
 
-import(FNN,car,dummies,mvtnorm)
+import(FNN,dummies,mvtnorm)
 
   importFrom("graphics", "abline", "matplot", "plot")
   importFrom("stats", "binomial", "coef", "cor", "cov", "glm", "lm",
              "loglin", "na.omit", "numericDeriv", "predict", "rbinom",
              "var")
   importFrom("utils", "combn")
+  importFrom("sandwich","vcovHC")
 
 S3method(coef,lmac)
 S3method(vcov,lmac)
 S3method(plot,rlm)
 S3method(predict,knn)
+S3method(plot,kmin)
 S3method(predict,ovaknn)
 
 export(knnest,preprocessx,meany, vary,loclin,predict.knn,nlshc,
@@ -22,4 +24,8 @@ export(knnest,preprocessx,meany, vary,loclin,predict.knn,nlshc,
    nonparvarplot,
    ridgelm,plot.rlm,
    l2,l1,
-   mm)
+   mm, 
+   unscale,
+   factorsToDummies,factorToDummies,dummiesToFactor,
+   pwplot,
+   TStoX,TStoMat)
