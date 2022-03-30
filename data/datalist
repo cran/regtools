@@ -1,7 +1,11 @@
+SwissRoll: sw
 courseRecords
 currency
 day
+day1
+day2
 english
+falldetection
 ltrfreqs
 mlb
 mlens
@@ -9,5 +13,10 @@ newadult
 oliveoils
 peDumms
 peFactors
+pef
+phoneme
 prgeng
 quizDocs
+quizzes
+weatherTS
+yell10k

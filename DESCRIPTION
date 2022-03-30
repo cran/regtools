@@ -1,10 +1,18 @@
 Package: regtools
-Version: 1.1.0
+Version: 1.7.0
 Title: Regression and Classification Tools
-Author: Norm Matloff
+Authors@R: c(person("Norm", "Matloff", email = "matloff@cs.ucdavis.edu", role = c("aut", "cre"), comment = c(ORCID = "0000-0001-9179-6785")),
+           person("Robin", "Yancey", email = "reyancey@ucdavis.edu", role = c("aut")),
+           person("Bochao", "Xin", email = "xinbochao97@outlook.com",role = c("ctb")),
+           person("Kenneth", "Lee", email = "honlee@ucdavis.edu", role = c("ctb")),
+           person("Rongkui", "Han", email = "rkbhan@ucdavis.edu", role = c("ctb")))
 Maintainer: Norm Matloff <matloff@cs.ucdavis.edu>
-Depends: R (>= 3.5.0),FNN,mvtnorm,dummies,sandwich
-Suggests: knitr, rmarkdown
+Depends: R (>= 3.5.0),FNN,gtools
+Imports:
+        R.utils,mvtnorm,sandwich,MASS,car,data.table,glmnet,rje,text2vec,
+        polyreg
+Suggests: knitr, rmarkdown, OpenImageR, cdparcoord, keras, magick,
+        partools
 VignetteBuilder: knitr
 License: GPL (>= 2)
 Description: Tools for linear, nonlinear and nonparametric regression
@@ -23,6 +31,11 @@ Description: Tools for linear, nonlinear and nonparametric regression
 URL: https://github.com/matloff/regtools
 BugReports: https://github.com/matloff/regtools/issues
 NeedsCompilation: no
-Packaged: 2019-08-25 19:15:57 UTC; normanmatloff
+Packaged: 2022-03-30 16:15:10 UTC; normanmatloff
+Author: Norm Matloff [aut, cre] (<https://orcid.org/0000-0001-9179-6785>),
+  Robin Yancey [aut],
+  Bochao Xin [ctb],
+  Kenneth Lee [ctb],
+  Rongkui Han [ctb]
 Repository: CRAN
-Date/Publication: 2019-08-25 21:30:02 UTC
+Date/Publication: 2022-03-30 17:30:02 UTC

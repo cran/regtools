@@ -6,6 +6,8 @@
 \alias{loglinac}
 \alias{tbltofakedf}
 \alias{makeNA}
+\alias{NAsTo0s}
+\alias{ZerosToNAs}
 
 \title{Available Cases Method for Missing Data}
 
@@ -16,6 +18,8 @@ Various estimators that handle missing data via the Available Cases Method
 \usage{
 lmac(xy,nboot=0) 
 makeNA(m,probna)
+NAsTo0s(x)
+ZerosToNAs(x,replaceVal=0)
 \method{coef}{lmac}(object,...)
 \method{vcov}{lmac}(object,...)
 pcac(indata,scale=FALSE) 
@@ -24,6 +28,7 @@ tbltofakedf(tbl)
 }
 
 \arguments{
+  \item{replaceVal}{Value to be replaced by NA.}
   \item{xy}{Matrix or data frame, X values in the first columns, Y
      in the last column.}
   \item{indata}{Matrix or data frame.}
@@ -31,13 +36,12 @@ tbltofakedf(tbl)
   \item{nboot}{If positive, number of bootstrap samples to take.}
   \item{probna}{Probability that an element will be NA.}
   \item{scale}{If TRUE, call \code{cor} instead of \code{cov}.}
-  \item{}{Matrix or data frame, one column per variable.}
   \item{tbl}{An R table.}
   \item{m}{Number of synthetic NAs to insert.}
   \item{object}{Output from \code{lmac}.}
   \item{...}{Needed for consistency with generic function.  Not used.}
   \item{margin}{A list of vectors specifying the model, as in
-  \code{loglin}.}
+     \code{loglin}.}
 
 }
 
@@ -59,7 +63,7 @@ tbltofakedf(tbl)
    The \code{pcac} function is an AC substitute for \code{prcomp}. The
    data is centered, corresponding to a fixed value of \code{center =
    TRUE} in \code{prcomp}.  It is also scaled if \code{scale} is TRUE,
-   corresponding \code{scale. = TRUE} in \code{prcomp;.} Due to AC,
+   corresponding \code{scale = TRUE} in \code{prcomp}. Due to AC,
    there is a small chance of negative eigenvalues, in which case
    \code{stop} will be called.
 
@@ -75,7 +79,7 @@ tbltofakedf(tbl)
 
 \value{
 
-   For \code{lmac}, an object of class \code{'lmac'}, with components
+   For \code{lmac}, an object of class \code{lmac}, with components
    
    \itemize{
    
@@ -88,7 +92,7 @@ tbltofakedf(tbl)
    
       \item{r2}, (unadjusted) R-squared
    
-      \item{cov}, for \code{nboot >0} the estimated covariance matrix
+      \item{cov}, for \code{nboot > 0} the estimated covariance matrix
       of the vector of estimated regression coefficients; accessible
       directly or by calling \code{vcov}, as with \code{lm} 
    

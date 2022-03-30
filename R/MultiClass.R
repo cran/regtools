@@ -1,102 +1,16 @@
 
-# One-vs.-All (OVA) and All-vs.All (AVA), parametric models
+# multiclass models; see also th q*() functions
 
-##################################################################
-# ovalogtrn: generate estimated regression functions
-##################################################################
+# deprecated:
 
-# arguments:
-
-#    m:  number of classes
-#    trnxy:  X, Y training set; Y in last column; Y coded 0,1,...,m-1
-#            for the m classes
-#    predx:  X values from which to predict Y values
-#    truepriors:  true class probabilities, typically from external source
-
-# arguments:
-
-#    m:  as above
-#    trnxy:  as above
-#    truepriors:  as above
-
-# value:
-
-#    matrix of the betahat vectors, one per column
-
-ovalogtrn <- function(m,trnxy,truepriors=NULL) {
-   p <- ncol(trnxy) 
-   x <- as.matrix(trnxy[,1:(p-1)])
-   y <- trnxy[,p]
-   outmat <- NULL
-   for (i in 0:(m-1)) {
-      ym <- as.integer(y == i)
-      betahat <- coef(glm(ym ~ x,family=binomial))
-      outmat <- cbind(outmat,betahat)
-   }
-   if (!is.null(truepriors)) {
-      tmp <- table(y)
-      wrongpriors <- tmp / sum(tmp)
-      outmat[1,] <- outmat[1,] 
-         - log((1-truepriors)/truepriors) + log((1-wrongpriors)/wrongpriors)
-   }
-   colnames(outmat) <- as.character(0:(m-1))
-   outmat
+ovalogtrn <- function(...) 
+{
+   stop('deprecated; use qLogit()')
 }
 
 ##################################################################
-# ovalogpred: predict Ys from new Xs
-##################################################################
 
-# arguments:  
-# 
-#    coefmat:  coefficient matrix, output from ovalogtrn()
-#    predx:  as above
-#    probs:  in addition to predicted classes, return the condtional
-#            class probabilities as an attribute, 'probs'
-# 
-# value:
-# 
-#    vector of predicted Y values, in {0,1,...,m-1}, one element for
-#    each row of predx
-
-ovalogpred <- function(coefmat,predx,probs=FALSE) {
-   # get est reg ftn values for each row of predx and each col of
-   # coefmat; vals from coefmat[,] in tmp[,i]
-   #
-   # let m = number of classes, np = number of obs to be predicted
-   tmp <- as.matrix(cbind(1,predx)) %*% coefmat  # np x m 
-   tmp <- logit(tmp)
-   preds <- apply(tmp,1,which.max) - 1
-   if (probs) {
-      sumtmp <- apply(tmp,1,sum)  # length np
-      normalized <- diag(1/sumtmp) %*% tmp
-      attr(preds,'probs') <- normalized
-   }
-   preds
-}
-
-##################################################################
-# ovalogloom: LOOM predict Ys from Xs
-##################################################################
-
-# arguments: as with ovalogtrn()
-
-# value: LOOM-estimated probability of correct classification\
-
-ovalogloom <- function(m,trnxy) {
-   n <- nrow(trnxy)
-   p <- ncol(trnxy) 
-   i <- 0
-   correctprobs <- replicate(n,
-      {
-         i <- i + 1
-         ovout <- ovalogtrn(m,trnxy[-i,])
-         predy <- ovalogpred(ovout,trnxy[-i,-p])
-         mean(predy == trnxy[-i,p])
-      })
-   mean(correctprobs)
-}
-
+#  older AVA, OVA code
 
 ##################################################################
 # avalogtrn: generate estimated regression functions
@@ -104,45 +18,60 @@ ovalogloom <- function(m,trnxy) {
 
 # arguments:
 
-#    m:  as above in ovalogtrn()
-#    trnxy:  as above in ovalogtrn()
+#    as in logitClass() above
 
 # value:
 
-#    matrix of the betahat vectors, one per column, in the order of
-#    combin()
+#    as in logitClass() above
 
-avalogtrn <- function(m,trnxy) {
-   p <- ncol(trnxy) 
+avalogtrn <- function(trnxy,yname) 
+{
+   if (is.null(colnames(trnxy))) 
+      stop('trnxy must have column names')
+   ycol <- which(names(trnxy) == yname)
+   y <- trnxy[,ycol]
+   if (!is.factor(y)) stop('Y must be a factor')
+   x <- trnxy[,-ycol,drop=FALSE]
+   xd <- factorsToDummies(x,omitLast=TRUE)
+   yd <- factorToDummies(y,'y',omitLast=FALSE)
+   m <- ncol(yd)
    n <- nrow(trnxy)
-   x <- as.matrix(trnxy[,1:(p-1)])
-   y <- trnxy[,p]
-   outmat <- NULL
+   classIDs <- apply(yd,1,which.max) - 1
+   classcounts <- table(classIDs)
    ijs <- combn(m,2) 
-   doreg <- function(ij) {
+   outmat <- matrix(nrow=ncol(xd)+1,ncol=ncol(ijs))
+   colnames(outmat) <- rep(' ',ncol(ijs))
+   attr(outmat,'Xcolnames') <- colnames(xd)
+   doreg <- function(ij)  # does a regression for one pair of classes
+   {
       i <- ij[1] - 1
       j <- ij[2] - 1
       tmp <- rep(-1,n)
-      tmp[y == i] <- 1
-      tmp[y == j] <- 0
+      tmp[classIDs == i] <- 1
+      tmp[classIDs == j] <- 0
       yij <- tmp[tmp != -1]
-      xij <- x[tmp != -1,]
+      xij <- xd[tmp != -1,]
       coef(glm(yij ~ xij,family=binomial))
    }
-   coefmat <- NULL
    for (k in 1:ncol(ijs)) {
       ij <- ijs[,k]
-      coefmat <- cbind(coefmat,doreg(ij))
-      colnames(coefmat)[k] <- paste(ij,collapse=',')
+      outmat[,k] <- doreg(ij)
+      colnames(outmat)[k] <- paste(ij,collapse=',')
    }
-   coefmat
+   if (any(is.na(outmat))) warning('some NA coefficients')
+   empirClassProbs <- classcounts/sum(classcounts)
+   attr(outmat,'empirClassProbs') <- empirClassProbs
+   attr(outmat,'nclasses') <- m
+   class(outmat) <- c('avalog','matrix')
+   outmat
 }
-################################################################## # avalogpred: predict Ys from new Xs
+
+################################################################## 
+# predict.avalog: predict Ys from new Xs
 ##################################################################
 
 # arguments:  
 # 
-#    m: as above
 #    coefmat:  coefficient matrix, output from avalogtrn()
 #    predx:  as above
 # 
@@ -151,51 +80,62 @@ avalogtrn <- function(m,trnxy) {
 #    vector of predicted Y values, in {0,1,...,m-1}, one element for
 #    each row of predx
 
-avalogpred <- function(m,coefmat,predx) {
-   ijs <- combn(m,2)  # as in avalogtrn()
-   n <- nrow(predx)
+avalogpred <- function() stop('user predict.avalog()')
+predict.avalog <- function(object,...) 
+{
+   dts <- list(...)
+   predpts <- dts$predpts
+   if (is.null(predpts)) stop('predpts must be a named argument')
+   n <- nrow(predpts)
+   predpts <- factorsToDummies(predpts,omitLast=TRUE)
+   if (!identical(colnames(predpts),attr(object,'Xcolnames')))
+      stop('column name mismatch between original, new X variables')
    ypred <- vector(length = n)
+   m <- attr(object,'nclasses')
    for (r in 1:n) {
       # predict the rth new observation
-      xrow <- c(1,unlist(predx[r,]))
+      xrow <- c(1,predpts[r,])
       # wins[i] tells how many times class i-1 has won
       wins <- rep(0,m)  
+      ijs <- combn(m,2)  # as in avalogtrn()
       for (k in 1:ncol(ijs)) {
+         # i,j play the role of Class 1,0
          i <- ijs[1,k]  # class i-1
          j <- ijs[2,k]  # class j-1
-         bhat <- coefmat[,k]
-         mhat <- logit(bhat %*% xrow)
-         if (mhat >= 0.5) wins[i] <- wins[i] + 1 else
-         wins[j] <- wins[j] + 1
+         bhat <- object[,k]
+         mhat <- logitftn(bhat %*% xrow)  # prob of Class i
+         if (mhat >= 0.5) wins[i] <- wins[i] + 1 else wins[j] <- wins[j] + 1
       }
-      ypred[r] <- which.max(wins) - 1
+      pred[r] <- which.max(wins) - 1
    }
    ypred
 }
 
-##################################################################
-# avalogloom: LOOM predict Ys from Xs
-##################################################################
+# deprecated
+avalogloom <- function(m,trnxy) stop('deprecated')
+## ##################################################################
+## # avalogloom: LOOM predict Ys from Xs
+## ##################################################################
+## 
+## # arguments: as with avalogtrn()
+## 
+## # value: LOOM-estimated probability of correct classification\
+## 
+## avalogloom <- function(m,trnxy) {
+##    n <- nrow(trnxy)
+##    p <- ncol(trnxy) 
+##    i <- 0
+##    correctprobs <- replicate(n,
+##       {
+##          i <- i + 1
+##          avout <- avalogtrn(m,trnxy[-i,])
+##          predy <- avalogpred(m,avout,trnxy[-i,-p])
+##          mean(predy == trnxy[-i,p])
+##       })
+##    mean(correctprobs)
+## }
 
-# arguments: as with avalogtrn()
-
-# value: LOOM-estimated probability of correct classification\
-
-avalogloom <- function(m,trnxy) {
-   n <- nrow(trnxy)
-   p <- ncol(trnxy) 
-   i <- 0
-   correctprobs <- replicate(n,
-      {
-         i <- i + 1
-         avout <- avalogtrn(m,trnxy[-i,])
-         predy <- avalogpred(m,avout,trnxy[-i,-p])
-         mean(predy == trnxy[-i,p])
-      })
-   mean(correctprobs)
-}
-
-logit <- function(t) 1 / (1+exp(-t))
+logitftn <- function(t) 1 / (1+exp(-t))
 
 matrixtolist <- function (rc,m) 
 {
@@ -209,57 +149,45 @@ matrixtolist <- function (rc,m)
 
 # uses One-vs.-All approach
 
-# knntrn: generate estimated regression function values
+# ovaknntrn: generate estimated regression function values
 
 # arguments
 
-#    y:  training set class data; either an R factor, or numeric
-#        coded 0,1,...,m-1
-#    xdata:  output of preprocessx() applied to the training set
-#            predictor data
-#    m:  number of classes
+#    trnxy:  matrix or dataframe, training set; Y col is a factor 
+#    yname:  name of the Y column
 #    k:  number of nearest neighbors
-#    truepriors:  true class probabilities, typically from external source
+#    xval:  if true, "leave 1 out," ie don't count a data point as its
+#        own neighbor
 
 # value:
 
-#    xdata from input, plus a new list componens regest: 
+#    xdata from input, plus new list components: 
 #
 #       regest: the matrix of estimated regression function values; 
 #               the element in row i, column j, is the probability 
 #               that Y = j given that X = row i in the X data, 
 #               estimated from the training set
+#       k: number of nearest neighbors
+#       empirClassProbs: proportions of cases in classes 0,1,...,m
 
-knntrn <- function(y,xdata,m=length(levels(y)),k,truepriors=NULL)
+knntrn <- function() stop('use ovaknntrn')
+ovaknntrn <- function(trnxy,yname,k,xval=FALSE)
 {
-   if (m < 3) stop('m must be at least 3; use knnest() instead')  
-   if (class(y) == 'factor') {
-      y <- as.numeric(y) - 1
-   }
-   x <- xdata$x
-   # replace y with m-1 dummies
-   ds <- dummies::dummy(y)[,-m]
-   for (i in 1:(m-1)) colnames(ds)[i] <- sprintf('y%d',i-1)
-   knnout <- knnest(ds,xdata,k)
-   outmat <- knnout$regest
-   outmat <- cbind(outmat,1-apply(outmat,1,sum))
-   colnames(outmat)[m] <- sprintf('y%d',m-1)
-   if (!is.null(truepriors)) {
-      tmp <- table(y)
-      if (length(tmp) != m) 
-         stop('some classes missing in Y data')
-      tmp <- tmp / sum(tmp)
-      # tmp now contains the estimated unconditional 
-      # class probabilities
-      for (i in 0:(m-1)) {
-         wrongp <- tmp[i]
-         wrongratio <- (1-wrongp) / wrongp
-         truep <- truepriors[i]
-         trueratio <- (1-truep) / truep
-         outmat[,i] <- classadjust(outmat[,i],wrongratio,trueratio)
-      }
-   }
-   xdata$regest <- outmat
+   if (is.null(colnames(trnxy))) 
+      stop('trnxy must have column names')
+   ycol <- which(names(trnxy) == yname)
+   y <- trnxy[,ycol]
+   if (!is.factor(y)) stop('Y must be a factor')
+   yd <- factorToDummies(y,'y',omitLast=FALSE)
+   m <- ncol(yd)
+   x <- trnxy[,-ycol,drop=FALSE]
+   xd <- factorsToDummies(x,omitLast=TRUE)
+   xdata <- preprocessx(xd,k,xval=xval)
+   empirClassProbs <- table(y) / sum(table(y))
+   knnout <- knnest(yd,xdata,k)
+   xdata$regest <- knnout$regest
+   xdata$k <- k
+   xdata$empirClassProbs <- empirClassProbs
    class(xdata) <- c('ovaknn')
    xdata
 }
@@ -279,10 +207,15 @@ knntrn <- function(y,xdata,m=length(levels(y)),k,truepriors=NULL)
 #       predy: predicted class labels for predpts    
 
 predict.ovaknn <- function(object,...) {
-   predpts <- unlist(...)
-   if (!is.matrix(predpts))
-      stop('prediction points must be a matrix')
+   dts <- list(...)
+   predpts <- dts$predpts
+   if (is.null(predpts)) stop('predpts must be a named argument')
+   # could get k too, but not used; we simply take the 1-nearest, as the
+   # prep data averaged k-nearest
    x <- object$x
+   if (!is.data.frame(predpts))
+      stop('prediction points must be a data frame')
+   predpts <- factorsToDummies(predpts,omitLast=TRUE)
    # need to scale predpts with the same values that had been used in
    # the training set
    ctr <- object$scaling[,1]
@@ -292,163 +225,155 @@ predict.ovaknn <- function(object,...) {
    idx <- tmp$nn.index
    regest <- object$regest[idx,,drop=FALSE]
    predy <- apply(regest,1,which.max) - 1
-   list(regest=regest,predy=predy)
+   attr(predy,'probs') <- regest
+   predy
 }
 
-classadjust <- function(econdprobs,wrongratio,trueratio) {
-   fratios <- (1 / econdprobs - 1) * (1 / wrongratio)
-   1 / (1 + trueratio * fratios)
-}
+# adjust a vector of estimated condit. class probabilities to reflect
+# actual uncondit. class probabilities
 
-# plot estimated regression/probability function of a univariate, 
-# binary y against each specified pair of predictors in x 
+# NOTE:  the below assumes just 2 classes, class 1 and class 0; however,
+# it applies to the general m-class case, because P(Y = i | X = t) can
+# be viewed as 1 - P(Y != i | X = t), i.e. class i vs. all others
 
-# for each point t, we ask whether est. P(Y = 1 | X = t) > P(Y = 1); if
-# yes, plot '1', else '0'
+# arguments:
  
-# cexval is the value of cex in 'plot' 
+#    econdprobs: estimated conditional probs. for class 1, for various t, 
+#       reported by the ML alg.
+#    wrongprob1: proportion of class 1 in the training data; returned as
+#       attr() in, e.g. logitClass()
+#    trueprob1: true proportion of class 1 
+ 
+# value:
+ 
+#     adjusted versions of econdprobs, estimated conditional class
+#     probabilities for predicted cases
 
-# if user specifies 'pairs', the format is one pair per column in the
-# provided matrix
+# why: say we wish to predict Y = 1,0 given X = t 
+# P(Y=1 | X=t) = pf_1(t) / [pf_1(t) + (1-p)f_0(t)]
+# where p = P(Y = 1); and f_i is the density of X within class i; so
+# P(Y=1 | X=t) = 1 / [1 + {f_0(t)/f_(t)} (1-p)/p]
+# and thus
+# f_0(t)/f_1(t) = [1/P(Y=1 | X=t) - 1] p/(1-p)
 
-# if band is non-NULL, only points within band, say 0.1, of est. P(Y =
-# 1) are displayed, for a contour-like effect
+# let q the actual sample proportion in class 1 (whether by sampling
+# design or from a post-sampling artificial balancing of the classes);
+# the ML algorith has, directly or indirectly, taken p to be q; so
+# substitute and work back to the correct P(Y=1 | X=t)
 
-pwplot <- function(y,x,k,pairs=combn(ncol(x),2),cexval=0.5,band=NULL) {
+# WARNING: adjusted probabilities may be larger than 1.0; they can be
+# truncated, or in a multiclass setting compared (which class has the
+# highest untruncated probability?)
+
+classadjust <- function(econdprobs,wrongprob1,trueprob1) {
+   wrongratio <- (1-wrongprob1) / wrongprob1
+   fratios <- (1 / econdprobs - 1) * (1 / wrongratio)
+   trueratios <- (1-trueprob1) / trueprob1
+   1 / (1 + trueratios * fratios)
+}
+
+#######################  boundaryplot()  ################################
+
+# for binary Y setting, drawing boundary between predicted Y = 1 and
+# predicted Y = 0, as determined by the argument regests
+
+# boundary is taken to be b(t) = P(Y = 1 | X = t) = 0.5
+
+# purpose: visually assess goodness of fit, typically running this
+# function twice, one for glm() then for say kNN() or e1071::svm(); if
+# there is much discrepancy and the analyst wishes to still use glm(),
+# he/she may wish to add polynomial terms or use the polyreg package
+
+# arguments:
+
+#   y01,x: Y vector (1s and 0s), X matrix or numerical data frame 
+#   regests: estimated regression function values
+#   pairs: matrix of predictor pairs to be plotted, one pair per column
+#   cex: plotting symbol size
+#   band: max distance from 0.5 for a point to be included in the contour 
+
+boundaryplot <- function(y01,x,regests,pairs=combn(ncol(x),2),
+   pchvals=2+y01,cex=0.5,band=0.10) 
+{
+   # e.g. fitted.values output of glm() may be shorter than an X column,
+   # due to na.omit default
+   if(length(regests) != length(y01))
+      stop('y01 and regests of different lengths')
+
+   # need X numeric for plotting
+   if (is.data.frame(x)) {
+      if (hasFactors(x)) stop('x must be nrongkuiumeric')
+      x <- as.matrix(x)
+      if (mode(x) != 'numeric') stop('x has character data')
+   }
+
+   # Y must be 0s,1s or equiv
+   if (length(table(y01)) != 2) stop('y01 must have only 2 values')
+   if (is.factor(y01)) y01 <- as.numeric(y01) - 1
+   
    p <- ncol(x)
-   meanyval <- mean(y)
-   ny <- length(y)
    for (m in 1:ncol(pairs)) {
+
       i <- pairs[1,m]
       j <- pairs[2,m]
       x2 <- x[,c(i,j)]
-      xd <- preprocessx(x2,k)
-      kout <- knnest(y,xd,k)
-      regest <- kout$regest
-      pred1 <- which(regest >= meanyval)
-      if (!is.null(band))  {
-         contourpts <- which(abs(regest - meanyval) < band)
-         x2 <- x2[contourpts,]
-      }
-      xnames <- names(x2)
-      plot(x2[pred1,1],x2[pred1,2],pch='1',cex=cexval,
-         xlab=xnames[1],ylab=xnames[2])
-      graphics::points(x2[-pred1,1],x2[-pred1,2],pch='0',cex=cexval)
-      readline("next plot")
+
+      # plot X points, symbols for Y
+      plot(x2,pch=pchvals,cex=cex)  
+
+      # add contour
+      near05 <- which(abs(regests - 0.5) < band)
+      points(x2[near05,],pch=21,cex=1.5*cex,bg='red')
+      if (m < ncol(pairs)) readline("next plot")
    }
 }
 
+#########################  confusion matrix  ################################
 
-# parget.knnx():
+# generates the confusion matrix
 
-# wrapper for use of 'parallel' package with get.knnx() of FNN package
+# for an m-class problem, 'pred' are the predicted class IDs,
+# taking values in 1,2,...,m; if 'actual' is numeric, then the same
+# condition holds, but 'actual' can be a factor, which when
+# "numericized" uses the same ID scheme (must be consistent with
+# 'actual')
 
-# arguments are same is for get.knnx(), except that 'algorithm' is set
-# and except for cls, a 'parallel' cluster; 'query' is distributed to
-# chunks at the cluster nodes, and 'data' is copied to all cluster
-# nodes; gen.knnx() is called at each node, then the results are
-# combined; PARALLEL OP NOT NOW IMPLEMENTED
-
-# value is the nn.index component of the list returned by get.knnx()
-
-## parget.knnx <- function(data, query, k=10, 
-##       algorithm="kd_tree",cls=NULL) {
-##    if (is.null(cls))  {
-##       tmp <- get.knnx(data,query,k,algorithm)
-##       return(tmp$nn.index)
-##    }
-##    partools::setclsinfo(cls)
-##    partools::clusterExport(cls,c('data','k','algorithm'),envir=environment())
-##    partools::distribsplit(cls,'query')
-##    partools::clusterEvalQ(cls,liibrary(FNN))
-##    tmp <- partools::clusterEvalQ(cls,get.knnx(data,query,k,algorithm))
-##    tmp <- lapply(tmp,function(tmpelt) tmpelt$nn.index)
-##    Reduce(rbind,tmp)
-## }
+confusion <- function(actual,pred) {
+   # if (is.factor(actual)) actual <- as.numeric(actual) 
+   table(actual,pred)
+}
 
 
+logOddsToProbs <- function(x) 
+{
+   u <- exp(-x)
+   1 / (1+u)
+}
 
-# ucbdf <- tbltofakedf(UCBAdmissions)
-# newucb <- matrix(nrow=nrow(ucbdf),ncol=ncol(ucbdf))
-# for (i in 1:3) {
-#    z <- ucbdf[,i] 
-#    z <- as.numeric(as.factor(z))
-#    newucb[,i] <- z
-# }
-# newucb[,3] <- newucb[,3] - 1
-# ovout <- ovalogtrn(6,newucb)
-# predy <- ovalogpred(ovout,newucb[,1:2])
-# mean(predy == newucb[,3])
-# avout <- avalogtrn(6,newucb)
-# predy <- avalogpred(6,avout,newucb[,1:2])
-# mean(predy == newucb[,3])
+# arguments:
 
-# forest <- read.csv("~/Research/Data/ForestTypes/training.csv")
-# z <- forest[,1]
-# z <- as.numeric(z)
-# z <- z - 1
-# forest[,1] <- z
-# f1 <- cbind(forest[,-1],forest[,1]) 
-# f2 <- f1[,-(1:20)]
-# ovout <- ovalogtrn(4,f2)
-# predy <- ovalogpred(ovout,f2[,-8])
-# mean(predy == f2[,8])
-# avout <- avalogtrn(4,f2)
-# predy <- avalogpred(4,avout,f2[,-8])
-# mean(predy == f2[,8])
-# f3 <- f1[,c(1:9,28)]
+#    y: labels in training set; a 0s and 1s vector 
+#    scores: values that your ML algorithm predicts from
 
+ROC <- function(y,scores) 
+{
+   n <- length(y)
+   numPos <- sum(y)
+   numNeg <- n - numPos
+   scoreOrder <- order(scores,decreasing=T)
+   tpr <- vector(length = n)
+   fpr <- vector(length = n)
+   for (i in 1:n) {
+      # scoresSorted = sort(scores); h = scoresSorted[i]
+      whichGteH <- scoreOrder[1:i]
+      numTruePos <- sum(y[whichGteH] == 1)
+      numFalsePos <- i - numTruePos
+      tpr[i] <- numTruePos / numPos
+      fpr[i] <- numFalsePos / numNeg
+   }
+   plot(fpr,tpr,type='l',pch=2,cex=0.5)
+   abline(0,1)
 
-# vert <- read.table('~/Research/Data/Vertebrae/vertebral_column_data/column_3C.dat',header=F)
-# vert$V7 <- as.numeric(vert$V7) - 1
-# ovout <- ovalogtrn(3,vert)
-# predy <- ovalogpred(ovout,vert[,-7])
-# mean(predy == vert$V7)
-# trnidxs <- sample(1:310,155)
-# predidxs <- setdiff(1:310,trnidxs)
-# trnidxs <- sample(1:310,225)
-# predidxs <- setdiff(1:310,trnidxs)
-# ovout <- ovalogtrn(3,vert[trnidxs,])
-# predy <- ovalogpred(ovout,vert[predidxs,1:6])
-# mean(predy == vert[predidxs,7])
-# avout <- avalogtrn(3,vert[trnidxs,])
-# predy <- avalogpred(3,avout,vert[predidxs,1:6])
-# mean(predy == vert[predidxs,7])
-
-# trnidxs <- sample(1:4526,2263)
-# predidxs <- setdiff(1:4526,trnidxs)
-# ovout <- ovalogtrn(6,newucb[trnidxs,])
-# predy <- ovalogpred(ovout,newucb[predidxs,1:2])
-# mean(predy == newucb[predidxs,3])
-# avout <- avalogtrn(6,newucb[trnidxs,])
-# predy <- avalogpred(6,avout,newucb[predidxs,1:2])
-# mean(predy == newucb[predidxs,3])
-
-
-
-# glass <- read.csv('~/Research/Data/Glass/glass.data.txt',header=F)
-# glass[,11] <- glass[,11] - 1
-
-
-# trnidxs <- sample(1:4526,2263)
-# predidxs <- setdiff(1:4526,trnidxs)
-# ovout <- ovalogtrn(6,newucb[trnidxs,])
-# predy <- ovalogpred(ovout,newucb[predidxs,1:2])
-# mean(predy == newucb[predidxs,3])
-# avout <- avalogtrn(6,newucb[trnidxs,])
-# predy <- avalogpred(6,avout,newucb[predidxs,1:2])
-# mean(predy == newucb[predidxs,3])
-
-# yeast <- read.table('~/Research/Data/Yeast/yeast.data.txt',header=F)
-# y1 <- yeast[,-1]  # delete name
-# y1[,9] <- as.numeric(y1[,9]) - 1
-# trnidxs <- sample(1:1484,742)
-# predidxs <- setdiff(1:1484,trnidxs)
-# ovout <- ovalogtrn(10,y1[trnidxs,])
-# predy <- ovalogpred(ovout,y1[predidxs,1:8])
-# mean(predy == y1[predidxs,9])
-# avout <- avalogtrn(10,y1[trnidxs,])
-# predy <- avalogpred(10,avout,y1[predidxs,1:8])
-# mean(predy == y1[predidxs,9])
+}
 
 

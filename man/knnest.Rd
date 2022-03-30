@@ -1,4 +1,5 @@
-\name{knnest,meany,vary,loclin,predict.knn,preprocessx,kmin,parvsnonparplot,nonparvsxplot,l1,l2}
+\name{knnest,meany,vary,loclin,predict.knn,preprocessx,kmin,parvsnonparplot,nonparvsxplot,l1,l2,kNN,bestKperPoint}
+\alias{kNN}
 \alias{knnest}
 \alias{predict.knn}
 % \alias{parget.knnx}
@@ -12,8 +13,17 @@
 \alias{nonparvarplot}
 \alias{l2}
 \alias{l1}
+\alias{MAPE}
+\alias{bestKperPoint}
+\alias{kNNallK} 
+\alias{kNNxv} 
+\alias{knntrn} 
+\alias{loclogit} 
+\alias{mediany} 
+\alias{plotExpVars}
+\alias{exploreExpVars}
 
-\title{Nonparametric Regression and Classification}
+\title{k-NN Nonparametric Regression and Classification}
 
 \description{
 Full set of tools for k-NN regression and classification, including both
@@ -22,11 +32,15 @@ models.
 }
 
 \usage{
+kNN(x,y,newx=x,kmax,scaleX=TRUE,PCAcomps=0,expandVars=NULL,expandVals=NULL,
+   smoothingFtn=mean,allK=FALSE,leave1out=FALSE, classif=FALSE,
+   startAt1=TRUE,saveNhbrs=FALSE,savedNhbrs=NULL)
 knnest(y,xdata,k,nearf=meany)
 preprocessx(x,kmax,xval=FALSE)
-meany(predpt,nearxy) 
-vary(predpt,nearxy) 
-loclin(predpt,nearxy) 
+meany(nearIdxs,x,y,predpt) 
+mediany(nearIdxs,x,y,predpt) 
+vary(nearIdxs,x,y,predpt) 
+loclin(nearIdxs,x,y,predpt) 
 \method{predict}{knn}(object,...)
 kmin(y,xdata,lossftn=l2,nk=5,nearf=meany) 
 % \method{plot}{kmin}(x,y,...)
@@ -35,24 +49,74 @@ nonparvsxplot(knnout,lmout=NULL)
 nonparvarplot(knnout,returnPts=FALSE)
 l2(y,muhat)
 l1(y,muhat)
+MAPE(yhat,y)
+bestKperPoint(x,y,maxK,lossFtn="MAPE",classif=FALSE)
+kNNallK(x,y,newx=x,kmax,scaleX=TRUE,PCAcomps=0,
+   expandVars=NULL,expandVals=NULL,smoothingFtn=mean,
+   allK=FALSE,leave1out=FALSE,classif=FALSE,startAt1=TRUE)
+kNNxv(x,y,k,scaleX=TRUE,PCAcomps=0,smoothingFtn=mean,
+   nSubSam=500)
+knnest(y,xdata,k,nearf=meany)
+loclogit(nearIdxs,x,y,predpt)
+mediany(nearIdxs,x,y,predpt) 
+exploreExpVars(xtrn, ytrn, xtst, ytst, k, eVar, maxEVal, lossFtn, 
+    eValIncr = 0.05, classif = FALSE, leave1out = FALSE) 
+plotExpVars(xtrn,ytrn,xtst,ytst,k,eVars,maxEVal,lossFtn,
+   ylim,eValIncr=0.05,classif=FALSE,leave1out=FALSE)
 }
 
 \arguments{
+  \item{nearf}{Function to be applied to a neighborhood.}
+  \item{ylim}{Range of Y values for plot.}
+  \item{lossFtn}{Loss function for plot.}
+  \item{eVar}{Variable to be expanded.}
+  \item{eVars}{Variables to be expanded.}
+  \item{maxEVal}{Maximum expansion value.}
+  \item{eValIncr}{Increment in range of expansion value.}
+  \item{xtrn}{Training set for X.}
+  \item{ytrn}{Training set for Y.}
+  \item{xtst}{Test set for X.}
+  \item{ytst}{Test set for Y.}
+  \item{nearIdxs}{Indices of the neighbors.}
+  \item{nSubSam}{Number of folds.}
+  \item{x}{"X" data, predictors, one row per data point, in the training
+     set.}
   \item{y}{Response variable data in the training set. Vector or matrix,
      the latter case for vector-valued response, e.g. multiclass
-     classification.}  
-  \item{x}{X data, predictors, one row per data point, in the training
-     set.}
+     classification.  In that case, can be a vector, either (0,1,2,...,)
+     or (1,2,3,...), which automatically is converted into a matrix of
+     dummies.}  
+  \item{newx}{New data points to be predicted.  If NULL in \code{kNN},
+     compute regression functions estimates on \code{x} and save for
+     future prediction with \code{predict.kNN}}
+  \item{scaleX}{If TRUE, call \code{scale} on \code{x} and \code{newx}}
+  \item{PCAcomps}{If positive, transform \code{x} and \code{newx} by
+     PCA, using the top \code{PCAcomps} principal components.  Disabled.}
+  \item{expandVars}{Indices of columns in \code{x} to expand.}
+  \item{expandVals}{The corresponding expansion values.}
+  \item{smoothingFtn}{Function to apply to the "Y" values in the 
+     set of nearest neighbors.  Built-in choices are \code{meany},
+     \code{mediany}, \code{vary} and \code{loclin}.}
+  \item{allK}{If TRUE, find regression estimates for all \code{k}
+     through \code{kmax}.  Currently disabled.}
+  \item{leave1out}{If TRUE, omit the 1-nearest neighbor from analysis}
+  \item{classif}{If TRUE, compute the predicted class labels, not just
+     the regression function values}
+  \item{startAt1}{If TRUE, class labels start at 1, else 0.}
+  \item{k}{Number of nearest neighbors} 
+  \item{saveNhbrs}{If TRUE, place output of \code{FNN::get.knnx} 
+     into \code{nhbrs} of component in return value}
+  \item{savedNhbrs}{If non-NULL, this is the \code{nhbrs} component 
+     in the return value of a previous call; \code{newx} must be the
+     same in both calls}
   \item{...}{Needed for consistency with generic.  See Details below for
      `arguments.}
   \item{xdata}{X and associated neighbor indices. Output of
      \code{preprocessx}.} 
-  \item{k}{Number of nearest neighbors} 
   \item{object}{Output of \code{knnest}.}
   \item{predpt}{One point on which to predict, as a vector.}
-  \item{nearxy}{A set of X neighbors of a point.}
-  \item{nearf}{Function to apply to the nearest neighbors of a point.}
   \item{kmax}{Maximal number of nearest neighbors to find.}
+  \item{maxK}{Maximal number of nearest neighbors to find.}
   \item{xval}{Cross-validation flag. If TRUE, then the set of nearest 
      neighbors of a point will not include the point itself.}
   \item{lossftn}{Loss function to be used in cross-validation
@@ -62,81 +126,76 @@ l1(y,muhat)
   \item{knnout}{Output of \code{knnest}.}
   \item{cex}{R parameter to control dot size in plot.}
   \item{muhat}{Vector of estimated regression function values.}
+  \item{yhat}{Vector of estimated regression function values.}
   \item{returnPts}{If TRUE, return matrix of plotted points.}
+  
 }
 
 \details{
-   
-   The \code{knnest} function does k-nearest neighbor regression
-   function estimation, in any dimension, i.e. any number of predictor
-   variables, and any number of response variables.  This of course 
-   includes classification problems case; a scalar Y = 0,1 would
-   represent two classes, with the regression function reducing to 
-   the conditional probability of class 1, given the predictors.  
 
-   The \code{preprocessx} function does the prep work.  For each row in
-   \code{x}, the code finds the \code{kmax} closest rows to that row.
-   By separating this computation from \code{knnest}, one can save a lot
-   of overall computing time.  If for instance one wants to try the
-   number of nearest neighbors \code{k} at 25, 50 and 100, one can call
-   \code{preprocessx} with \code{kmax} equal to 100, then reuse the
-   results; in calling \code{knnest} for several values of \code{k}, we
-   do not need to call \code{preprocessx} again.  Setting \code{xval} to
-   TRUE turns out cross-validation: the neighborhood of a point will not
-   include the point itself; note that this is set in
-   \code{preprocessx}, not in \code{knnest}.
-   
-   One can specify various types of smoothing by proper specification of
-   the \code{nearf} function. The default is \code{meany}, specifying
-   the standard averaging of the neighbor Y values.  Another possible
-   choice is \code{vary}, specifying calculation of the sample variance
-   of those Y values; this is useful in assessing heteroscedasticity in
-   a linear model.  
-   
-   Another choice is to specify local linear smoothing by setting
-   \code{nearf} to \code{loclin}.  Here the value of the regression
-   function at a point is predicted from a linear fit to the point's
-   neighbors.  This may be especially helpful 
-   to counteract bias near the edges of the data.  As in any regression
-   fit, the number of predictors should be considerably less than the
-   number of neighbors.
+   The \code{kNN} function is the main tool here; \code{knnest} is being
+   deprecated.  (Note too \code{qeKNN}, a wrapper for \code{kNN}; more
+   on this below.)  Here are the capabilities:
 
-   The X, i.e. predictor, data will be scaled by the code, so as to put
-   all predictor variables on an equal footing.  The scaling parameters
-   will be recorded, and then applied later in prediction.
+   In its most basic form, the function will input training data and
+   output predictions for new cases \code{newx}.  By default this is
+   done for a single value of the number \code{k} of nearest neighbors,
+   but by setting \code{allK} to TRUE, the user can request that it be
+   done for all \code{k} through the specified maximum.
 
-   The function \code{predict.knn} uses the output of \code{knnest} to
-   do regression estimation or prediction on new points.  Since the
-   output of \code{knnest} is of class \code{'knn'}, one invokes this
-   function with the simpler \code{predict}.  The second argument is the
-   set of new points, named \code{predpts} within the code.  It is
-   specified as a matrix if there is more than one prediction point and
-   more than one predictor variable; otherwise, use a vector.
-   
-   A "1-NN" method is used here:  Given a new point u whose
-   Y value we wish to predict, the code finds the single closest row
-   in the training set, and returns the previously-estimated regression
-   function value at that row.  If u needs to be scaled, specify 
-   \code{TRUE} in the third argument of \code{predict};
-   otherwise specify FALSE.
+   In the second form, \code{newx} is set to NULL in the call to
+   \code{kNN}.  No predictions are made; instead, the regression function 
+   is estimated on all data points in \code{x}, which are saved in the return 
+   value.  Future new cases can then be predicted from this saved object, 
+   via \code{predict.kNN} (called via the generic \code{predict}).  
+   The call form is \code{predict(knnout,newx,newxK}, with a 
+   default value of 1 for \code{newxK}.  
 
-   It can be shown that nearest-neighbor (or kernel) regression
-   estimates are subject to substantial bias near the fringes of the
-   data; the further away from the center of the data, the worse the
-   bias.  This can be mitigated by user specification that a local
-   linear regression be applied, as follows:  For each new point u to
-   predict, the r closest X rows in the training set to u will be found,
-   and a linear regression of the corresponding Y values against those X
-   values will be computed. The result of that operation will be used to
-   predict the Y value at the point u.  The value of r is specified as
-   the third argument in the call to \code{predict}; if left
-   unspecified, the 1-NN method is used as described above, and it may
-   be more accurate than the local-linear approach within the bulk of
-   the data set.
+   In this second form, the closest \code{k} points to the \code{newx} in
+   \code{x} are determined as usual, but instead of averaging their Y
+   values, the average is taken over the fitted regression estimates at
+   those points.  In this manner, there is almost no computational cost
+   in the prediction stage.  
+
+   The second form is intended more for production use, so that neighbor
+   distances need not be repeatedly recomputed.
+
+   Nearest-neighbor computation can be time-consuming.  If more than one
+   value of \code{k} is anticipated, for the same \code{x}, \code{y} and
+   \code{newx}, first run with the largest anticipated value of
+   \code{k}, with \code{saveNhbrs} set to TRUE.  Then for other values
+   of \code{k}, set \code{savedNhbrs} to the \code{nhbrs} component in
+   the return value of the first call.
+
+   In addition, a novel feature allows the user to weight some
+   predictors more than others.  This is done by scaling the given
+   predictor up or down, according to a specified value.  Normally, this
+   should be done with \code{scaleX = TRUE}, which applies
+   \code{scale()} to the data.  In other words, first we create a "level
+   playing field" in which all predictors have standard deviation 1.0,
+   then scale some of them up or down.
+
+   Alternatives are provided to calculating the mean Y in the given
+   neighborhood, such as the median and the variance, the latter of
+   possible use in dealing with heterogeneity in linear models.
+
+   Another choice of note is to allow local-linear smoothing, by
+   setting \code{smoothingFtn} to \code{loclin}.  Here the value of the
+   regression function at a point is predicted from a linear fit to the
+   point's neighbors.  This may be especially helpful to counteract bias
+   near the edges of the data.  As in any regression fit, the number of
+   predictors should be considerably less than the number of neighbors.
+
+   Custom functions for smoothing can easily be written, say following
+   the pattern of \code{loclin}.
+
+   The main alternative to \code{kNN} is \code{qeKNN} in the qe* ("quick
+   and easy") series. It is more convenient, e.g. allowing factor
+   inputs, but less flexible.
 
    The functions \code{ovaknntrn} and \code{ovaknnpred} are multiclass
-   wrappers for \code{knnest} and \code{knnpred}. Here \code{y} is coded
-   0,1,...,\code{m}-1 for the \code{m} classes.
+   wrappers for \code{knnest} and \code{knnpred}, thus also deprecated.
+   Here \code{y} is coded 0,1,...,\code{m}-1 for the \code{m} classes.
 
    The tools here can be useful for fit assessment of parametric models.
    The \code{parvsnonparplot} function plots fitted values of
@@ -151,136 +210,96 @@ l1(y,muhat)
    
 }
 
-\value{
-
-The return value of \code{preprocessx} is an R list. Its \code{x}
-component is the scaled \code{x} matrix, with the scaling factors being
-recorded in the \code{scaling} component. The \code{idxs} component
-contains the indices of the nearest neighbors of each point in the
-predictor data, stored in a matrix with \code{nrow(x)} rows and \code{k}
-columns.  Row i contains the indices of the nearest rows in \code{x} to
-row i of \code{x}.  The first of these indices is for the closest point,
-then for the second-closest, and so on.  If cross-validation is
-requrested (\code{xval = TRUE}, then any point will not be considered a
-neighbor of itself.
-
-The \code{knnest} function returns an expanded version of \code{xdata},
-with the expansion consisting of a new component \code{regest}, the
-estimated regression function values at the training set points.
-
-The function \code{predict.knn} returns the predicted Y values at
-\code{predpts}.  It is called simply via \code{predict}.
-
-One can explore the effects of various numbers of nearest neighbors
-\code{k} through the \code{kmin} function.  (This function should be
-cosidered experimental.) It will run \code{knnest} for the values of
-\code{k} specified in \code{nk}.  If the latter is a number, the range 0
-to \code{xdata$kmax} will be divided into \code{nk} equally
-subintervals, and the values of \code{k} used will then be the right
-endpoints of the subintervals.  The function returns an R list, with the
-component \code{meanerrs} containing the cross-validated mean loss
-function values and \code{ks} containing the corresponding values of
-\code{k}; \code{plot.knn} then plots the former against the latter.
-
-% The \code{parget.knnx} function returns the matrix of indices of nearest
-% neighbors, as with the \code{nn.index} component of the return value of
-% \code{get.knnx}.
-
-}
-
 \examples{
-set.seed(9999)
-x <- matrix(sample(1:100,30),ncol=3)
-xd <- preprocessx(x[,1],2,TRUE)  # just 1 predictor
-ko <- knnest(x[,2],xd,2)  # Y is x[,2]
-ko$regest # 1st element = 74.5
-predict(ko,matrix(76),TRUE)  # 47.5
-ko <- knnest(x[,-1],xd,2)  # Y bivar
-ko$regest # 1st row = (74.5,31.5)
-predict(ko,matrix(76),TRUE)  # 47.5, 65.0
 
-set.seed(9999)
-xe <- matrix(rnorm(30000),ncol=3) 
-xe[,-3] <- xe[,-3] + 2 
-# xe is 2 predictors and epsilon 
-y <- xe \%*\% c(1,0.5,0.2)  # Y
-x <- xe[,-3]  # X
-xdata <- preprocessx(x,500)  # k as high as 500
-zout <- knnest(y,xdata,200) 
-predict(zout,matrix(c(1,1),nrow=1),TRUE)  # about 1.55
-predict(zout,rbind(c(1,1),c(2,1.2)),TRUE)  # about 1.55, 2.58
-predict(zout,rbind(c(0,0)),TRUE)  # about 0.63
+x <- rbind(c(1,0),c(2,5),c(0,5),c(3,3),c(6,3))
+y <- c(8,3,10,11,4)
+newx <- c(0,0)
+
+kNN(x,y,newx,2,scaleX=FALSE)
+# $whichClosest
+#      [,1] [,2]
+# [1,]    1    4
+# $regests
+# [1] 9.5
+
+kNN(x,y,newx,3,scaleX=FALSE,smoothingFtn=loclin)$regests
+# 7.307692
+
+knnout <- kNN(x,y,newx,2,scaleX=FALSE)
+knnout
+# $whichClosest
+#      [,1] [,2]
+# [1,]    1    4
+# ...
 
 \dontrun{
-data(prgeng)
-pe <- prgeng
-# dummies for MS, PhD
-pe$ms <- as.integer(pe$educ == 14)
-pe$phd <- as.integer(pe$educ == 16)
-# computer occupations only
-pecs <- pe[pe$occ >= 100 & pe$occ <= 109,]
-# for simplicity, let's choose a few predictors
-pecs1 <- pecs[,c(1,7,9,12,13,8)]
-# will predict wage income from age, gender etc.
-# prepare nearest-neighbor data, k up to 50
-xdata <- preprocessx(pecs1[,1:5],50)
-zout <- knnest(pecs1[,6],xdata,50)  # k = 50
-# find the est. mean income for 42-year-old women, 52 weeks worked, with
-# a Master's
-predict(zout,matrix(c(42,2,52,0,0),nrow=1),TRUE)  # 62106
-# try k = 25; don't need to call preprocessx() again
-zout <- knnest(pecs1[,6],xdata,25)
-predict(zout,matrix(c(42,2,52,0,0),nrow=1),TRUE)  # 69104
-# quite a difference; what k values are good?
-kmout <- kmin(pecs1[,6],xdata) # at least 50
-# what about a man?
-zout <- knnest(pecs1[,6],xdata,50)
-predict(zout,matrix(c(42,1,52,0,0),nrow=1),TRUE)  # 78588
-# form training and test sets, fit on the former and predict on the
-# latter
-fullidxs <- 1:nrow(pecs1)
-train <- sample(fullidxs,10000)
-xdata <- preprocessx(pecs1[train,1:5],50)
-trainout <- knnest(pecs1[train,6],xdata,50)
-testout <- predict(trainout,as.matrix(pecs1[-train,-6]),TRUE)
-# find mean abs. prediction error (about $25K)
-mean(abs(pecs1[-train,6] - testout))
-# examples of fit assessment
-# look for nonlinear relations between Y and each X
-nonparvsxplot(zout)  # keep hitting Enter for next plot
-# there seem to be quadratic relations with age and wkswrkd, so add quad
-# terms and run lm()
-pecs2 <- pecs1 
-pecs2$age2 <- pecs1$age^2 
-pecs2$wks2 <- pecs1$wkswrkd^2 
-lmout2 <- lm(wageinc ~ .,data=pecs2) 
-# check parametric fit by comparing to kNN
-parvsnonparplot(lmout2,zout) 
-# linear model line somewhat faint, due to large n;
-# parametric model seems to overpredict at high end;
-# to deal with faintness, reduce size of points
-parvsnonparplot(lmout2,zout,cex=0.1) 
-# assess homogeneity of conditional variance
-nonparvarplot(zout) 
-# hockey stick!
-}
+data(mlb) 
+mlb <- mlb[,c(4,6,5)]  # height, age, weight
+# fit, then predict 75", age 21, and 72", age 32
+knnout <- kNN(mlb[,1:2],mlb[,3],rbind(c(75,21),c(72,32)),25) 
+knnout$regests
+# [1] 202.72 195.72
 
-# Y vector-valued (3 classes)
-# 3 clusters, equal wts, coded 0,1,2
-n <- 1500 
-# within-grp cov matrix
-cv <- rbind(c(1,0.2),c(0.2,1)) 
-xy <- NULL 
-for (i in 1:3) 
-   xy <- rbind(xy,rmvnorm(n,mean=rep(i*2.0,2),sigma=cv)) 
-y <- rep(0:2,each=n)
-xy <- cbind(xy,dummy(y))
-xdata <- preprocessx(xy[,-(3:5)],20) # X is xy[,1:2], k <= 20
-ko <- knnest(xy[,3:5],xdata,20) 
-# find predicted Y for each data pt 
-mx <- apply(as.matrix(ko$regest),1,which.max) - 1
-# overall correct classification rate
-mean(mx == y)  # should be about 0.87
+# fit now, predict later
+knnout <- kNN(mlb[,1:2],mlb[,3],NULL,25) 
+predict(knnout,c(70,28)) 
+# [1] 186.48
+
+data(peDumms) 
+names(peDumms) 
+ped <- peDumms[,c(1,20,22:27,29,31,32)] 
+names(ped) 
+
+# fit, and predict income of a 35-year-old man, MS degree, occupation 101,
+# worked 50 weeks, using 25 nearest neighbors
+kNN(ped[,-10],ped[,10],c(35,1,0,0,1,0,0,0,1,50),25) $regests
+# [1] 67540
+
+# fit, and predict occupation 101 for a 35-year-old man, MS degree, 
+# wage $55K, worked 50 weeks, using 25 nearest neighbors
+z <- kNN(ped[,-c(4:8)],ped[,4],c(35,1,0,1,55,50),25,classif=TRUE)
+z$regests
+# [1] 0.16  16% chance of occupation 101
+z$ypreds
+# [1] 0  class 0, i.e. not occupation 101; round(0.24) = 0, 
+# computed by user request, classif = TRUE
+
+# the y argument must be either a vector (2-class setting) or a matrix
+# (multiclass setting)
+occs <- as.matrix(ped[, 4:8])
+z <- kNN(ped[,-c(4:8)],occs,c(35,1,0,1,72000,50),25,classif=TRUE)
+z$ypreds
+# [1] 3   occupation 3, i.e. 102, is predicted
+
+# predict occupation in general; let's bring occ.141 back in (was
+# excluded as a predictor due to redundancy)
+names(peDumms)
+#  [1] "age"     "cit.1"   "cit.2"   "cit.3"   "cit.4"   "cit.5"   "educ.1" 
+#  [8] "educ.2"  "educ.3"  "educ.4"  "educ.5"  "educ.6"  "educ.7"  "educ.8" 
+# [15] "educ.9"  "educ.10" "educ.11" "educ.12" "educ.13" "educ.14" "educ.15"
+# [22] "educ.16" "occ.100" "occ.101" "occ.102" "occ.106" "occ.140" "occ.141"
+# [29] "sex.1"   "sex.2"   "wageinc" "wkswrkd" "yrentry"
+occs <- as.matrix(peDumms[,23:28])  
+z <- kNN(ped[,-c(4:8)],occs,c(35,1,0,1,72000,50),25,classif=TRUE)
+z$ypreds
+# [1] 3   prediction is occ.102
+
+# try weight age 0.5, wkswrked 1.5; use leave1out to avoid overfit
+knnout <- kNN(ped[,-10],ped[,10],ped[,-10],25,leave1out=TRUE)
+mean(abs(knnout$regests - ped[,10]))
+# [1] 25341.6
+
+# use of the weighted distance feature; deweight age by a factor of 0.5,
+# put increased weight on weeks worked, factor of 1.5
+knnout <- kNN(ped[,-10],ped[,10],ped[,-10],25,
+   expandVars=c(1,10),expandVals=c(0.5,1.5),leave1out=TRUE)
+mean(abs(knnout$regests - ped[,10]))
+# [1] 25196.61
+
+
+
+}
 
 }
 
